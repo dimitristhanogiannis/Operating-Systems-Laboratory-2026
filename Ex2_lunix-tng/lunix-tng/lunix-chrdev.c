@@ -48,7 +48,9 @@ static int lunix_chrdev_state_needs_refresh(struct lunix_chrdev_state_struct *st
 	struct lunix_sensor_struct *sensor;
 	
 	WARN_ON ( !(sensor = state->sensor));
-	/* ? */
+	/* ? 
+	Timestamp comparison to check if new data exist
+	*/
 
 	/* The following return is bogus, just for the stub to compile */
 	return 0; /* ? */
@@ -74,6 +76,7 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 
 	/*
 	 * Any new data available?
+	 Call lunix_chrdev_state_needs_refresh
 	 */
 	/* ? */
 
@@ -95,7 +98,9 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 
 static int lunix_chrdev_open(struct inode *inode, struct file *filp)
 {
-	/* Declarations */
+	/* Declarations 
+	lunix_chrdev_state_struct 
+	*/
 	/* ? */
 	int ret;
 
@@ -110,7 +115,9 @@ static int lunix_chrdev_open(struct inode *inode, struct file *filp)
 	 */
 	
 	/* Allocate a new Lunix character device private state structure */
-	/* ? */
+	/* ? 
+	state init
+	filp private*/
 out:
 	debug("leaving, with ret = %d\n", ret);
 	return ret;
