@@ -147,7 +147,7 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 	sensor = state->sensor;
 	WARN_ON(!sensor);
 
-	/* Lock? */
+	/* Lock? (sem)*/
 	/*
 	 * If the cached character device state needs to be
 	 * updated by actual sensor data (i.e. we need to report
@@ -156,7 +156,7 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 	if (*f_pos == 0) {
 		while (lunix_chrdev_state_update(state) == -EAGAIN) {
 			/* ? */
-			/* The process needs to sleep */
+			/* The process needs to sleep (wq)*/
 			/* See LDD3, page 153 for a hint */
 		}
 	}
@@ -179,7 +179,7 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 	ret = -ENODEV;
 	goto out;
 out:
-	/* Unlock? */
+	/* Unlock? (sem)*/
 	return ret;
 }
 
@@ -215,7 +215,7 @@ int lunix_chrdev_init(void)
 	
 	dev_no = MKDEV(LUNIX_CHRDEV_MAJOR, 0);
 	/* ? */
-	/* register_chrdev_region? */
+	register_chrdev_region(dev_no, 16 * 8, "lunix"); // register 16 * 8 minor numbers for lunix chrdev
 
 	/* Since this code is a stub, exit early */
 	return 0;
@@ -225,7 +225,7 @@ int lunix_chrdev_init(void)
 		goto out;
 	}
 	/* ? */
-	/* cdev_add? */
+	cdev_add(&lunix_chrdev_cdev, dev_no, 16 * 8); // add character device
 	if (ret < 0) {
 		debug("failed to add character device\n");
 		goto out_with_chrdev_region;
