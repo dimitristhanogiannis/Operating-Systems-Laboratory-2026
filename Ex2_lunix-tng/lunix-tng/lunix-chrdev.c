@@ -47,13 +47,12 @@ static int lunix_chrdev_state_needs_refresh(struct lunix_chrdev_state_struct *st
 {
 	struct lunix_sensor_struct *sensor;
 	
-	WARN_ON ( !(sensor = state->sensor));
-	/* ? 
-	Timestamp comparison to check if new data exist
-	*/
-
+	WARN_ON (!(sensor = state->sensor));
+	/* ? */
+	
 	/* The following return is bogus, just for the stub to compile */
-	return 0; /* ? */
+	return (sensor->msr_data[state->type]->last_update > state->buf_timestamp); //Timestamp comparison to check if new data exist
+	/* ? */
 }
 
 /*
@@ -67,6 +66,13 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 	
 	debug("leaving\n");
 
+	struct lunix_msr_data_struct *m = state->sensor->msr_data[state->type]
+
+	uint32_t raw;
+	uint32_t ts;
+
+	unsigned long flags; //CPU register state for spinlock
+
 	/*
 	 * Grab the raw data quickly, hold the
 	 * spinlock for as little as possible.
@@ -74,11 +80,19 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 	/* ? */
 	/* Why use spinlocks? See LDD3, p. 119 */
 
+	spin_lock_irqsave(&sensor->lock, flags);
+
+	raw = m->values[0];
+	ts = m->last_update;
+
+	spin_unlock_irqrestore(&sensor->lock, flags);
+
 	/*
 	 * Any new data available?
-	 Call lunix_chrdev_state_needs_refresh
 	 */
 	/* ? */
+
+	if(ts == state->buf_timestamp) return -EAGAIN;
 
 	/*
 	 * Now we can take our time to format them,
@@ -86,6 +100,30 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 	 */
 
 	/* ? */
+
+	state->buf_timestamp = ts;
+
+	switch(state->type){
+	case BATT:
+		formatted_value = lookup_voltage[raw];
+		break;
+	case TEMP:
+		formatted_value = lookup_temperature[raw];
+		break;
+	case LIGHT:
+		formatted_value = lookup_light[raw];
+		break;
+	}
+
+	long integer_part = formatted_value / 1000;
+	long decimal_part = formatted_value % 1000;
+
+	if(decimal_part < 0) decimal_part = -decimal_part;
+
+	if (formatted_value < 0 && integer_part == 0) 
+		state->buf_lim = snprintf((char *)state->buf_data, LUNIX_CHRDEV_BUFSZ, "-%ld.%03ld\n", integer_part, decimal_part);
+	else 
+    	state->buf_lim = snprintf((char *)state->buf_data, LUNIX_CHRDEV_BUFSZ, "%ld.%03ld\n", integer_part, decimal_part);
 
 	debug("leaving\n");
 	return 0;
@@ -98,10 +136,11 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 
 static int lunix_chrdev_open(struct inode *inode, struct file *filp)
 {
-	/* Declarations 
-	lunix_chrdev_state_struct 
-	*/
+	/* Declarations */
 	/* ? */
+
+	struct lunix_chrdev_state_struct *state;
+
 	int ret;
 
 	debug("entering\n");
@@ -115,9 +154,32 @@ static int lunix_chrdev_open(struct inode *inode, struct file *filp)
 	 */
 	
 	/* Allocate a new Lunix character device private state structure */
-	/* ? 
-	state init
-	filp private*/
+	/* ? */
+
+	unsigned int minor = iminor(inode);
+	unsigned int sensor = minor >> 8;
+	unsigned int type = minor & 7;
+
+	if (sensor >= lunix_sensor_cnt || type >= N_LUNIX_MSR) {
+		ret = -ENODEV;
+		goto out;
+	}
+
+	kzalloc(sizeof(*state), GFP_KERNEL);
+	if (!state) {
+		ret = -ENOMEM;
+		goto out;
+	}
+ 
+	state->type = type;
+	state->sensor = &lunix_sensors[sensor];
+	state->buf_lim = 0;
+	state->buf_timestamp = 0;
+	sema_init(&state->lock, 1);
+
+	filp->private_data = state;
+	ret = 0;
+
 out:
 	debug("leaving, with ret = %d\n", ret);
 	return ret;
@@ -126,6 +188,7 @@ out:
 static int lunix_chrdev_release(struct inode *inode, struct file *filp)
 {
 	/* ? */
+	kfree(filp->private_data);
 	return 0;
 }
 
