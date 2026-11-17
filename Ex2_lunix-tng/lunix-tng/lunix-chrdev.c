@@ -117,6 +117,8 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 	case LIGHT:
 		formatted_value = lookup_light[raw];
 		break;
+	default:
+		return -EINVAL;
 	}
 
 	integer_part = formatted_value / 1000;
