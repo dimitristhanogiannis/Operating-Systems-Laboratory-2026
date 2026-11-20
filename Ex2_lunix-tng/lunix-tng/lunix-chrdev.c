@@ -55,6 +55,15 @@ static int lunix_chrdev_state_needs_refresh(struct lunix_chrdev_state_struct *st
 	/* ? */
 }
 
+/* Used by raw ioctl while sleeping for a sample newer than raw_timestamp. */
+static int lunix_chrdev_raw_needs_refresh(struct lunix_chrdev_state_struct *state)
+{
+	struct lunix_msr_data_struct *m;
+
+	m = state->sensor->msr_data[state->type];
+	return m->last_update != state->raw_timestamp;
+}
+
 /*
  * Updates the cached state of a character device
  * based on sensor data. Must be called with the
@@ -181,6 +190,7 @@ static int lunix_chrdev_open(struct inode *inode, struct file *filp)
 	state->sensor = &lunix_sensors[sensor];
 	state->buf_lim = 0;
 	state->buf_timestamp = 0;
+	state->raw_timestamp = 0;
 	sema_init(&state->lock, 1);
 
 	filp->private_data = state;
@@ -200,7 +210,89 @@ static int lunix_chrdev_release(struct inode *inode, struct file *filp)
 
 static long lunix_chrdev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-	return -EINVAL;
+	struct lunix_chrdev_state_struct *state = filp->private_data;
+	struct lunix_sensor_struct *sensor;
+	unsigned long flags;
+	uint16_t raw;
+	uint32_t timestamp;
+	int ret = 0;
+
+	// The open file state identifies the sensor and measurement type.
+	if (!state)
+		return -EINVAL;
+	// Check that this command belongs to Lunix and has a supported number.
+	if (_IOC_TYPE(cmd) != LUNIX_IOC_MAGIC || _IOC_NR(cmd) > LUNIX_IOC_MAXNR)
+		return -ENOTTY;
+	// These commands copy data from the kernel to user space.
+	if (_IOC_DIR(cmd) != _IOC_READ)
+		return -EINVAL;
+
+	sensor = state->sensor;
+	// Protect this open file's cached state.
+	if (down_interruptible(&state->lock))
+		return -ERESTARTSYS;
+
+	switch (cmd) {
+	case LUNIX_IOC_GET_COOKED:
+		// Refresh the formatted cache, waiting for a new sample as read() does.
+		while ((ret = lunix_chrdev_state_update(state)) == -EAGAIN) {
+			// Release the semaphore before sleeping.
+			up(&state->lock);
+			// A non-blocking file returns immediately if no sample is ready.
+			if (filp->f_flags & O_NONBLOCK)
+				return -EAGAIN;
+			// Sleep until the measurement timestamp changes.
+			if (wait_event_interruptible(sensor->wq,lunix_chrdev_state_needs_refresh(state)))
+				return -ERESTARTSYS;
+			// Reacquire the semaphore and check again after waking.
+			if (down_interruptible(&state->lock))
+				return -ERESTARTSYS;
+		}
+		// Copy the formatted text to the user-provided buffer.
+		if (!ret && copy_to_user((void __user *)arg, state->buf_data, state->buf_lim))
+			ret = -EFAULT;
+		break;
+	case LUNIX_IOC_GET_RAW:
+		// Wait for a raw sample newer than the last one returned by this ioctl.
+		for (;;) {
+			// Read the raw value and timestamp together as one consistent snapshot.
+			spin_lock_irqsave(&sensor->lock, flags);
+			raw = (uint16_t)sensor->msr_data[state->type]->values[0];
+			timestamp = sensor->msr_data[state->type]->last_update;
+			spin_unlock_irqrestore(&sensor->lock, flags);
+
+			// A changed timestamp means a new sample is ready.
+			if (timestamp != state->raw_timestamp)
+				break;
+
+			// No new sample: release the semaphore before waiting.
+			up(&state->lock);
+			if (filp->f_flags & O_NONBLOCK)
+				return -EAGAIN;
+			// Sleep until the raw timestamp changes.
+			if (wait_event_interruptible(sensor->wq,
+					lunix_chrdev_raw_needs_refresh(state)))
+				return -ERESTARTSYS;
+			// Reacquire the semaphore and take another snapshot after waking.
+			if (down_interruptible(&state->lock))
+				return -ERESTARTSYS;
+		}
+		// Copy the raw value to user space.
+		if (copy_to_user((void __user *)arg, &raw, sizeof(raw)))
+			ret = -EFAULT;
+		else
+			// Mark the sample as returned only after the copy succeeds.
+			state->raw_timestamp = timestamp;
+		break;
+	default:
+		// This ioctl command is not supported.
+		ret = -ENOTTY;
+		break;
+	}
+
+	// Release the semaphore before returning.
+	up(&state->lock);
+	return ret;
 }
 
 static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t cnt, loff_t *f_pos)

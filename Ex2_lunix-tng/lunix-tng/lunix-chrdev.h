@@ -37,6 +37,8 @@ struct lunix_chrdev_state_struct {
 	int buf_lim;
 	unsigned char buf_data[LUNIX_CHRDEV_BUFSZ];
 	uint32_t buf_timestamp;
+	/* Timestamp of the last raw sample returned through ioctl. */
+	uint32_t raw_timestamp;
 
 	struct semaphore lock;
 
@@ -54,13 +56,15 @@ void lunix_chrdev_destroy(void);
 #endif /* __KERNEL__ */
 
 #include <linux/ioctl.h>
+#include <linux/types.h>
 
 /*
  * Definition of ioctl commands
  */
 #define LUNIX_IOC_MAGIC     LUNIX_CHRDEV_MAJOR
-//#define LUNIX_IOC_EXAMPLE _IOR(LUNIX_IOC_MAGIC, 0, void *)
+#define LUNIX_IOC_GET_COOKED _IOR(LUNIX_IOC_MAGIC, 0, char[LUNIX_CHRDEV_BUFSZ])
+#define LUNIX_IOC_GET_RAW    _IOR(LUNIX_IOC_MAGIC, 1, __u16)
 
-#define LUNIX_IOC_MAXNR 0
+#define LUNIX_IOC_MAXNR 1
 
 #endif /* _LUNIX_H */
