@@ -6,6 +6,13 @@
 modules.order
 Module.symvers
 .tmp_versions/
+*.exe
+*.out
+*.a
+*.so
+lunix-logger
+lunix-ioctl-compare
 lunix-attach
 mk-lunix-lookup
 lunix-lookup.h
+measurements.log
