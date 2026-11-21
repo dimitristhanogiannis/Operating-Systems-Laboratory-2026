@@ -242,7 +242,7 @@ static long lunix_chrdev_ioctl(struct file *filp, unsigned int cmd, unsigned lon
 			if (filp->f_flags & O_NONBLOCK)
 				return -EAGAIN;
 			// Sleep until the measurement timestamp changes.
-			if (wait_event_interruptible(sensor->wq,lunix_chrdev_state_needs_refresh(state)))
+			if (wait_event_interruptible(sensor->wq, lunix_chrdev_state_needs_refresh(state)))
 				return -ERESTARTSYS;
 			// Reacquire the semaphore and check again after waking.
 			if (down_interruptible(&state->lock))
@@ -334,7 +334,7 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 
 	/* End of file */
 	/* ? */
-	if(*f_pos >= state->buf_lim){ // if we have read all of the buf the read should return 0
+	if(*f_pos >= state->buf_lim){ // if something went wrong, the read should return 0
 		ret = 0;
 		goto out;
 	}
@@ -365,7 +365,36 @@ out:
 
 static int lunix_chrdev_mmap(struct file *filp, struct vm_area_struct *vma)
 {
-	return -EINVAL;
+	struct lunix_chrdev_state_struct *state;
+	unsigned long pfn; // page location in the kernel memory
+	unsigned long size;
+
+	state = filp->private_data;
+
+	WARN_ON(!state);
+
+	size = vma->vm_end - vma->vm_start;
+	if (size > PAGE_SIZE) // we want only one page for allocation
+		return -EINVAL;
+
+	if (vma->vm_pgoff != 0) // offset must be 0 (one page)
+		return -EINVAL;
+
+	if (vma->vm_flags & VM_WRITE) // only read operation is allowed
+		return -EPERM;
+
+	vm_flags_set(vma, VM_IO | VM_DONTEXPAND | VM_DONTDUMP); // this page is for I/O (not swapping in disk), 
+														  // page expanding not allowed (possible collision with other measurments),
+														  // dont dump this page in case of failure (segmentation fault)
+
+	pfn = page_to_pfn(virt_to_page(state->sensor->msr_data[state->type])); // find page frame number in the kernel memory
+																		   // multiplied by 4096 so that we can map pfn to actual address
+
+	if (remap_pfn_range(vma, vma->vm_start, pfn, size, vma->vm_page_prot)) // map the virtual memory page of the user space 
+																		   // to the physical memory page of the sensor data
+		return -EAGAIN;
+
+	return 0;
 }
 
 static struct file_operations lunix_chrdev_fops = 
