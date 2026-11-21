@@ -4,7 +4,7 @@
  * Implementation of character devices
  * for Lunix:TNG
  *
- * dimitrios thanogiannis/dimitrios karatzanos
+ * Dimitrios Thanogiannis <el21902@mail.ntua.gr>, Dimitrios Karatzanos <el21083@mail.ntua.gr>
  *
  */
 
