@@ -97,12 +97,12 @@ int main(int argc, char **argv)
 		    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &local) == 0)
 			strcpy(timestamp, "unknown time");
 
-		printf("[%s] cooked ioctl: %s\n", timestamp, cooked_buf);
+		printf("[%s] cooked ioctl: %s", timestamp, cooked_buf);
 		printf("[%s] raw ioctl:    %u (", timestamp, raw);
 		for (int bit = 15; bit >= 0; bit--)
 			putchar((raw & (1u << bit)) ? '1' : '0');
 		puts(")");
-		printf("[%s] raw -> cooked: %s\n", timestamp, converted);
+		printf("[%s] raw -> cooked: %s\n\n", timestamp, converted);
 		fflush(stdout);
 	}
 }
