@@ -39,24 +39,33 @@ USER_CFLAGS = -Wall -Werror #-m32
 
 PWD       := $(shell pwd)
 
-all: modules lunix-attach lunix-ioctl-compare
+all: modules lunix-attach lunix-ioctl-compare lunix-logger mmap_use_case
 
 modules: lunix-lookup.h
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) $(KERNEL_VERBOSE) $(KERNEL_MAKE_ARGS) modules
 
 clean: 
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) $(KERNEL_VERBOSE) $(KERNEL_MAKE_ARGS) clean
-	rm -f modules.order
+	rm -f modules.order Module.symvers
 	rm -f lunix-attach
 	rm -f lunix-ioctl-compare
+	rm -f lunix-logger
+	rm -f mmap_use_case
 	rm -f mk-lunix-lookup
 	rm -f lunix-lookup.h
+	rm -f *.log
 
 lunix-attach: lunix.h lunix-attach.c
 	$(CC) $(USER_CFLAGS) -o $@ lunix-attach.c
 
 lunix-ioctl-compare: lunix-chrdev.h lunix-ioctl-compare.c lunix-lookup.h
 	$(CC) $(USER_CFLAGS) -o $@ lunix-ioctl-compare.c
+
+lunix-logger: lunix.h lunix-logger.c
+	$(CC) $(USER_CFLAGS) -o $@ lunix-logger.c
+
+mmap_use_case: lunix.h mmap_use_case.c
+	$(CC) $(USER_CFLAGS) -o $@ mmap_use_case.c
 
 #
 # Automagically generated lookup tables

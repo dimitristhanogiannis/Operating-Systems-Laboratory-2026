@@ -388,7 +388,6 @@ static int lunix_chrdev_mmap(struct file *filp, struct vm_area_struct *vma)
 														  // dont dump this page in case of failure (segmentation fault)
 
 	pfn = page_to_pfn(virt_to_page(state->sensor->msr_data[state->type])); // find page frame number in the kernel memory
-																		   // multiplied by 4096 so that we can map pfn to actual address
 
 	if (remap_pfn_range(vma, vma->vm_start, pfn, size, vma->vm_page_prot)) // map the virtual memory page of the user space 
 																		   // to the physical memory page of the sensor data
