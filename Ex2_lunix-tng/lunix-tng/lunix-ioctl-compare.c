@@ -98,8 +98,11 @@ int main(int argc, char **argv)
 			strcpy(timestamp, "unknown time");
 
 		printf("[%s] cooked ioctl: %s\n", timestamp, cooked_buf);
-		printf("[%s] raw ioctl:    %u\n", timestamp, raw);
-		printf("[%s] raw -> cooked: %s\n\n", timestamp, converted);
+		printf("[%s] raw ioctl:    %u (", timestamp, raw);
+		for (int bit = 15; bit >= 0; bit--)
+			putchar((raw & (1u << bit)) ? '1' : '0');
+		puts(")");
+		printf("[%s] raw -> cooked: %s\n", timestamp, converted);
 		fflush(stdout);
 	}
 }
